@@ -12,7 +12,7 @@ and compose demo. An endpoint whose security check is unfinished does not ship.
 
 ## Stage 1: Foundation (branch `stage/1-foundation`)
 
-- [ ] **1.1 Monorepo scaffold.** pnpm workspaces, Turborepo, TS strict base
+- [x] **1.1 Monorepo scaffold.** pnpm workspaces, Turborepo, TS strict base
   config, Biome, Vitest, package skeletons per D-006.
   Accept: `pnpm typecheck`, `pnpm lint`, `pnpm test` pass on a clean clone.
 - [ ] **1.2 API skeleton.** Fastify app factory, Zod env config, pino logs with
