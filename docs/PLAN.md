@@ -20,7 +20,7 @@ and compose demo. An endpoint whose security check is unfinished does not ship.
   correlation IDs, problem+json error handler, `/healthz`, `/readyz`.
   Accept: tests prove redaction, problem+json shape (code, retryable,
   correlation_id, detail), health endpoints.
-- [ ] **1.3 Database and worker.** Drizzle, migration runner, immutable
+- [x] **1.3 Database and worker.** Drizzle, migration runner, immutable
   `event_log` (append-only enforced by trigger) and `audit_events`, Redis
   client, BullMQ worker skeleton with health.
   Accept: migrations apply to empty Postgres 16; UPDATE/DELETE on event_log
