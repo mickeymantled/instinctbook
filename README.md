@@ -25,6 +25,10 @@ pnpm format     # format the repo (biome)
 pnpm test       # run every package's test suite (turbo)
 ```
 
+`apps/api` also has its own dev-loop scripts: `pnpm --filter @ibook/api dev` runs the API with
+file watching (see `apps/api/.env.example` for config), and `pnpm --filter @ibook/api start`
+runs the built server from `dist/server.js`.
+
 ## Docs
 
 See [`docs/`](./docs) for the product spec (`SPEC.md`), the build prompt

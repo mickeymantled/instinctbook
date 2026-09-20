@@ -1,5 +1,5 @@
 {
-  "name": "@ibook/api",
+  "name": "@ibook/observability",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,22 +17,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@ibook/observability": "workspace:*",
-    "@ibook/protocol": "workspace:*",
-    "fastify": "^5.12.5",
-    "fastify-type-provider-zod": "^7.0.0",
-    "pino": "^10.3.1",
-    "ulid": "^3.0.2",
-    "zod": "^4.6.5"
+    "pino": "^10.3.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "^4.23.13",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
