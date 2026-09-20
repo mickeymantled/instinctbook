@@ -25,7 +25,7 @@ and compose demo. An endpoint whose security check is unfinished does not ship.
   client, BullMQ worker skeleton with health.
   Accept: migrations apply to empty Postgres 16; UPDATE/DELETE on event_log
   fails; worker processes a no-op job.
-- [ ] **1.4 OpenAPI generation.** Zod as the single schema source; generate
+- [x] **1.4 OpenAPI generation.** Zod as the single schema source; generate
   JSON Schema and OpenAPI 3.1 to `docs/openapi/`; serve at `/openapi.json`;
   deterministic output and a drift check.
   Accept: regenerating twice yields no diff; served doc equals the file.
