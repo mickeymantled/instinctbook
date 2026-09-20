@@ -29,7 +29,7 @@ and compose demo. An endpoint whose security check is unfinished does not ship.
   JSON Schema and OpenAPI 3.1 to `docs/openapi/`; serve at `/openapi.json`;
   deterministic output and a drift check.
   Accept: regenerating twice yields no diff; served doc equals the file.
-- [ ] **1.5 Docker Compose.** api, worker, web (placeholder), postgres, redis,
+- [x] **1.5 Docker Compose.** api, worker, web (placeholder), postgres, redis,
   minio, clamav, mailpit; Dockerfiles; healthchecks; OpenTelemetry wiring.
   Accept: `docker compose up` reaches healthy for every service.
 - [ ] **1.6 CI.** GitHub Actions: typecheck, lint, test (Postgres and Redis
