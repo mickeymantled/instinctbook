@@ -1,0 +1,293 @@
+# Full local ibook stack: `docker compose up` (per docs/BUILD_PROMPT.md's definition of done).
+# Project name is fixed to `ibook` (not derived from the directory name) so container/volume/
+# network names are predictable and never collide with `infra/docker/compose.dev.yaml`'s
+# `ibook-dev` project, which this stack must NOT interfere with (it is used by the test suite —
+# see that file's own comment, and README.md "Local infrastructure").
+#
+# See infra/docker/README.md for: full port table, how to read mail in Mailpit, how to enable
+# the `observability` profile, and Colima memory sizing (ClamAV alone wants >= 3-4 GB free).
+name: ibook
+
+networks:
+  default:
+    name: ibook_default
+
+volumes:
+  ibook-postgres-data:
+  ibook-redis-data:
+  ibook-minio-data:
+  ibook-clamav-data:
+
+services:
+  # ---------------------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------------------
+
+  ibook-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    init: true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ibook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ibook_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-ibook}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-55433}:5432"
+    volumes:
+      - ibook-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ibook} -d ${POSTGRES_DB:-ibook}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  ibook-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    init: true
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-56380}:6379"
+    volumes:
+      - ibook-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # MinIO's official image is no longer published to Docker Hub (`minio/minio` 404s there as of
+  # this writing) — quay.io/minio/minio is MinIO's own current recommended registry and is a
+  # like-for-like replacement, same image contents.
+  ibook-minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    init: true
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-ibook_dev_only_access_key}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-ibook_dev_only_secret_key}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-59000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-59001}:9001"
+    volumes:
+      - ibook-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # One-shot: creates the two private buckets (no anonymous/public read) this app will use once
+  # stage 6 (artifacts) lands. Exits 0 once done; `pnpm stack:smoke` checks that exit code.
+  ibook-minio-init:
+    image: quay.io/minio/mc:latest
+    init: true
+    depends_on:
+      ibook-minio:
+        condition: service_healthy
+    environment:
+      MC_HOST_local: http://${S3_ACCESS_KEY_ID:-ibook_dev_only_access_key}:${S3_SECRET_ACCESS_KEY:-ibook_dev_only_secret_key}@ibook-minio:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mc mb --ignore-existing local/${S3_BUCKET_ARTIFACTS:-ibook-artifacts}
+        mc mb --ignore-existing local/${S3_BUCKET_QUARANTINE:-ibook-quarantine}
+        mc anonymous set none local/${S3_BUCKET_ARTIFACTS:-ibook-artifacts}
+        mc anonymous set none local/${S3_BUCKET_QUARANTINE:-ibook-quarantine}
+        echo "buckets ready"
+
+  # Slow to boot (downloads virus definitions on first start) and memory-hungry — see
+  # infra/docker/README.md. Not a dependency of api/worker readiness: nothing in this slice
+  # scans anything yet (that's stage 6), so api/worker must never block on this being healthy.
+  ibook-clamav:
+    image: clamav/clamav-debian:stable
+    restart: unless-stopped
+    init: true
+    mem_limit: 3g
+    volumes:
+      - ibook-clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 8m
+
+  ibook-mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-58025}:8025"
+      # SMTP (1025) is intentionally not published — only api/worker (on the compose network)
+      # and the Mailpit UI itself need it.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8025/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------------------
+
+  # One-shot: applies packages/db/migrations, then exits. Uses the api image (which carries
+  # packages/db/migrations — see infra/docker/api.Dockerfile) rather than a separate image.
+  ibook-migrate:
+    image: ibook-api
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    init: true
+    depends_on:
+      ibook-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ibook}:${POSTGRES_PASSWORD:-ibook_dev_only}@ibook-postgres:5432/${POSTGRES_DB:-ibook}
+    entrypoint: ["node"]
+    command: ["node_modules/@ibook/db/dist/migrate-cli.js"]
+
+  ibook-api:
+    image: ibook-api
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      ibook-migrate:
+        condition: service_completed_successfully
+      ibook-postgres:
+        condition: service_healthy
+      ibook-redis:
+        condition: service_healthy
+    environment:
+      # Not a typo: this stack is a local demo, not a production deployment, and a later slice
+      # ships a dev-only Instinct attestation verifier that must REFUSE to start when
+      # NODE_ENV=production (docs/DECISIONS.md D-002). Keeping NODE_ENV=development here, even
+      # though api/worker run from production Docker images, is what keeps that dev verifier
+      # usable in this stack. The Dockerfile's own ENV NODE_ENV=production is the default for
+      # any *other* deployment of this image; compose overrides it for this specific use.
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_NAME: ibook-api
+      DATABASE_URL: postgres://${POSTGRES_USER:-ibook}:${POSTGRES_PASSWORD:-ibook_dev_only}@ibook-postgres:5432/${POSTGRES_DB:-ibook}
+      REDIS_URL: redis://ibook-redis:6379
+      # Inert until stage 6 (artifacts) / stage 7 (webhooks/notifications) read them — see
+      # docs/BUILD_PROMPT.md slice 1.5 item 4.
+      S3_ENDPOINT: http://ibook-minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-ibook_dev_only_access_key}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-ibook_dev_only_secret_key}
+      S3_BUCKET_ARTIFACTS: ${S3_BUCKET_ARTIFACTS:-ibook-artifacts}
+      S3_BUCKET_QUARANTINE: ${S3_BUCKET_QUARANTINE:-ibook-quarantine}
+      S3_FORCE_PATH_STYLE: "true"
+      SMTP_HOST: ibook-mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: ${MAIL_FROM:-no-reply@ibook.local}
+      CLAMAV_HOST: ibook-clamav
+      CLAMAV_PORT: "3310"
+      # Empty by default (initTelemetry treats "" the same as unset: a no-op) — set this and run
+      # with `--profile observability` to enable tracing. See infra/docker/README.md.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  ibook-worker:
+    image: ibook-worker
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      ibook-migrate:
+        condition: service_completed_successfully
+      ibook-postgres:
+        condition: service_healthy
+      ibook-redis:
+        condition: service_healthy
+    environment:
+      # See ibook-api's NODE_ENV comment above — same reasoning applies here.
+      NODE_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_NAME: ibook-worker
+      DATABASE_URL: postgres://${POSTGRES_USER:-ibook}:${POSTGRES_PASSWORD:-ibook_dev_only}@ibook-postgres:5432/${POSTGRES_DB:-ibook}
+      REDIS_URL: redis://ibook-redis:6379
+      WORKER_HEALTH_PORT: "3001"
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      S3_ENDPOINT: http://ibook-minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-ibook_dev_only_access_key}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-ibook_dev_only_secret_key}
+      S3_BUCKET_ARTIFACTS: ${S3_BUCKET_ARTIFACTS:-ibook-artifacts}
+      S3_BUCKET_QUARANTINE: ${S3_BUCKET_QUARANTINE:-ibook-quarantine}
+      S3_FORCE_PATH_STYLE: "true"
+      SMTP_HOST: ibook-mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: ${MAIL_FROM:-no-reply@ibook.local}
+      CLAMAV_HOST: ibook-clamav
+      CLAMAV_PORT: "3310"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    # No published port: the worker's health server has no other reason to be reachable from
+    # the host. Compose still healthchecks it over the private network.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3001/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  ibook-web:
+    image: ibook-web
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      ibook-api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: http://ibook-api:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------------------
+  # Optional: `docker compose --profile observability up` also starts this. Off by default
+  # (docs/BUILD_PROMPT.md slice 1.5 item 2: "Do NOT add an OTel collector container to compose
+  # by default"). See infra/docker/README.md for the full enable steps.
+  # ---------------------------------------------------------------------------------------
+
+  ibook-otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    profiles: ["observability"]
+    init: true
+    volumes:
+      - ./infra/docker/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:${OTEL_COLLECTOR_HTTP_PORT:-54318}:4318"

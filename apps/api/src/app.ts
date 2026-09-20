@@ -1,5 +1,10 @@
 import type { Database } from "@ibook/db";
+import {
+  type FastifyOtelInstrumentation,
+  IBOOK_CORRELATION_ID_ATTRIBUTE,
+} from "@ibook/observability";
 import type { Redis } from "@ibook/queue";
+import { trace } from "@opentelemetry/api";
 import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import Fastify, { LogController } from "fastify";
 import fastifyPlugin from "fastify-plugin";
@@ -47,6 +52,13 @@ export interface BuildAppDeps {
    */
   readonly db?: Database | undefined;
   readonly redis?: Redis | undefined;
+  /**
+   * The same `@fastify/otel` instance passed to `initTelemetry`'s `extraInstrumentations`
+   * (see src/instrumentation.ts) — `undefined` when telemetry is disabled. Fastify-level spans
+   * only exist when this is registered as a plugin, which is why it's threaded through here
+   * rather than app.ts constructing its own.
+   */
+  readonly fastifyOtelInstrumentation?: FastifyOtelInstrumentation | undefined;
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
@@ -81,6 +93,13 @@ export function buildApp(deps: BuildAppDeps) {
 
   const app = Fastify(serverOptions).withTypeProvider<ZodTypeProvider>();
 
+  if (deps.fastifyOtelInstrumentation !== undefined) {
+    // Registered as early as possible so its request/reply hooks wrap every route this app
+    // declares afterward, and its own tracer was already started by `initTelemetry` (same
+    // instance, see src/instrumentation.ts).
+    app.register(deps.fastifyOtelInstrumentation.plugin());
+  }
+
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
@@ -111,6 +130,9 @@ export function buildApp(deps: BuildAppDeps) {
         reply.header("x-content-type-options", "nosniff");
         reply.header("referrer-policy", "no-referrer");
         reply.header("cache-control", "no-store");
+        // Correlates traces with logs/support requests without ever recording request content
+        // (rule #6). A no-op when telemetry is disabled (no active span).
+        trace.getActiveSpan()?.setAttribute(IBOOK_CORRELATION_ID_ATTRIBUTE, request.id);
       });
 
       instance.addHook("onResponse", async (request, reply) => {

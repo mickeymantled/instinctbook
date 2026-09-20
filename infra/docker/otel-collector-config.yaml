@@ -1,0 +1,19 @@
+# Minimal collector config for the optional `observability` compose profile: receives OTLP/HTTP
+# traces and just logs them (the `debug` exporter) — there is no real backend wired up locally,
+# this is only for eyeballing that spans are flowing and privacy-sanitized end to end. See
+# infra/docker/README.md for how to enable this profile.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]

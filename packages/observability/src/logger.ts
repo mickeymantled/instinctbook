@@ -1,3 +1,4 @@
+import { trace } from "@opentelemetry/api";
 import type { LoggerOptions } from "pino";
 import pino from "pino";
 import { REDACT_PATHS, REDACTED_CENSOR } from "./redaction.js";
@@ -51,6 +52,17 @@ export function createLoggerOptions(input: CreateLoggerOptionsInput): LoggerOpti
       res(reply: SerializableResponse) {
         return { statusCode: reply.statusCode };
       },
+    },
+    // Adds trace_id/span_id to every log line emitted while an OpenTelemetry span is active
+    // (slice 1.5 item 2), so logs and traces can be correlated. A no-op (returns {}) whenever
+    // telemetry is disabled or no span is active — see packages/observability/src/telemetry.ts.
+    mixin() {
+      const span = trace.getActiveSpan();
+      if (span === undefined) {
+        return {};
+      }
+      const spanContext = span.spanContext();
+      return { trace_id: spanContext.traceId, span_id: spanContext.spanId };
     },
   };
 }

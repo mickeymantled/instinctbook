@@ -1,0 +1,2 @@
+Real static assets land here in stage 3. Kept so infra/docker/web.Dockerfile can always COPY
+this directory (Next's standalone output does not include it automatically).

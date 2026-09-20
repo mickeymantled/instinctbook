@@ -97,4 +97,58 @@ describe("loadConfig", () => {
     expect(message).toContain("PORT");
     expect(message).toContain("LOG_LEVEL");
   });
+
+  describe("dev-only credential guard", () => {
+    it("refuses to start when NODE_ENV=production and DATABASE_URL is dev-only", () => {
+      let caught: unknown;
+      try {
+        loadConfig({
+          NODE_ENV: "production",
+          DATABASE_URL: "postgres://ibook:ibook_dev_only@127.0.0.1:5432/ibook",
+          REDIS_URL: "redis://example",
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      const message = (caught as Error).message;
+      expect(message).toContain("DATABASE_URL");
+      expect(message).not.toContain("ibook_dev_only@127.0.0.1");
+    });
+
+    it("refuses to start when NODE_ENV=production and REDIS_URL is dev-only", () => {
+      let caught: unknown;
+      try {
+        loadConfig({
+          NODE_ENV: "production",
+          DATABASE_URL: "postgres://example",
+          REDIS_URL: "redis://:redis_dev_only@127.0.0.1:6379",
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toContain("REDIS_URL");
+    });
+
+    it("allows a dev-only DATABASE_URL outside production", () => {
+      const config = loadConfig({
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://ibook:ibook_dev_only@127.0.0.1:5432/ibook",
+        REDIS_URL: "redis://example",
+      });
+      expect(config.DATABASE_URL).toContain("ibook_dev_only");
+    });
+
+    it("allows production to start with a non-dev-only DATABASE_URL", () => {
+      const config = loadConfig({
+        NODE_ENV: "production",
+        DATABASE_URL: "postgres://ibook:s3cret@db.internal:5432/ibook",
+        REDIS_URL: "redis://cache.internal:6379",
+      });
+      expect(config.NODE_ENV).toBe("production");
+    });
+  });
 });

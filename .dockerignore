@@ -1,0 +1,36 @@
+# Keeps the Docker build context (repo root) small and avoids ever baking secrets or
+# repo-local files into an image. infra/docker/*.Dockerfile COPY the whole repo root into their
+# `pruner` stage, then use `turbo prune`, so this only needs to exclude what turbo prune doesn't
+# already narrow down for us, plus anything that must never reach a build context at all.
+
+node_modules
+**/node_modules
+.git
+.turbo
+**/.turbo
+dist
+**/dist
+.next
+**/.next
+coverage
+**/coverage
+*.tsbuildinfo
+
+# Secrets: never send a real .env file to the Docker daemon, even accidentally. .env.example
+# files are fine (and needed by nothing at build time, but harmless either way).
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+
+# Docs are not read by any app at build or run time (docs/openapi/README.md documents that
+# docs/openapi/ itself is only touched by the `openapi:generate`/`openapi:check` CLI scripts,
+# which run outside Docker) — excluding the whole tree keeps the build context small.
+docs
+
+.DS_Store
+**/.DS_Store
+*.log
+npm-debug.log*

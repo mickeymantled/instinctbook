@@ -18,7 +18,13 @@
     "infra:reset": "docker compose -f infra/docker/compose.dev.yaml down -v",
     "db:migrate": "pnpm --filter @ibook/db run db:migrate",
     "openapi:generate": "turbo run build --filter=@ibook/api && pnpm --filter @ibook/api run openapi:generate",
-    "openapi:check": "turbo run build --filter=@ibook/api && pnpm --filter @ibook/api run openapi:check"
+    "openapi:check": "turbo run build --filter=@ibook/api && pnpm --filter @ibook/api run openapi:check",
+    "stack:up": "node scripts/stack-up.mjs",
+    "stack:down": "docker compose -p ibook down",
+    "stack:reset": "docker compose -p ibook down -v",
+    "stack:logs": "docker compose -p ibook logs -f",
+    "stack:ps": "docker compose -p ibook ps --all",
+    "stack:smoke": "node scripts/smoke-stack.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

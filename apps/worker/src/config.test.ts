@@ -63,4 +63,33 @@ describe("loadConfig", () => {
     const config = loadConfig(REQUIRED);
     expect(Object.isFrozen(config)).toBe(true);
   });
+
+  describe("dev-only credential guard", () => {
+    it("refuses to start when NODE_ENV=production and DATABASE_URL is dev-only", () => {
+      let caught: unknown;
+      try {
+        loadConfig({
+          NODE_ENV: "production",
+          DATABASE_URL: "postgres://ibook:ibook_dev_only@127.0.0.1:5432/ibook",
+          REDIS_URL: "redis://example",
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      const message = (caught as Error).message;
+      expect(message).toContain("DATABASE_URL");
+      expect(message).not.toContain("ibook_dev_only@127.0.0.1");
+    });
+
+    it("allows a dev-only DATABASE_URL outside production", () => {
+      const config = loadConfig({
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://ibook:ibook_dev_only@127.0.0.1:5432/ibook",
+        REDIS_URL: "redis://example",
+      });
+      expect(config.DATABASE_URL).toContain("ibook_dev_only");
+    });
+  });
 });
