@@ -1,3 +1,5 @@
+import type { Database } from "@ibook/db";
+import type { Redis } from "@ibook/queue";
 import type { FastifyServerOptions } from "fastify";
 import Fastify, { LogController } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -14,12 +16,33 @@ const ONE_MEBIBYTE = 1_048_576;
 const CORRELATION_ID_LOG_LABEL = "correlationId";
 const CORRELATION_ID_HEADER = "x-correlation-id";
 
+/**
+ * `db`/`redis` are only present when the caller decorates them (production always does, via
+ * server.ts — see {@link BuildAppDeps}). They're optional here, not just at the `BuildAppDeps`
+ * call site, so a handler that reads `app.db`/`app.redis` is forced to account for the case
+ * where slice 1.3's unit tests build an app with neither.
+ */
+declare module "fastify" {
+  interface FastifyInstance {
+    readonly db?: Database;
+    readonly redis?: Redis;
+  }
+}
+
 export interface BuildAppDeps {
   readonly config: Config;
   /** Logger construction overrides. Tests pass a stream here to capture log output. */
   readonly logger?: LoggerOverrides;
   /** Dependency health checks run by GET /readyz. Defaults to none. */
   readonly readinessChecks?: ReadinessChecks;
+  /**
+   * Real dependencies, decorated onto the Fastify instance as `app.db` / `app.redis` for later
+   * handlers to use. Optional so `buildApp` stays constructible in unit tests that don't need a
+   * real Postgres or Redis connection (most of this package's own tests) — only `server.ts`
+   * (the real process entrypoint) is expected to always provide both.
+   */
+  readonly db?: Database | undefined;
+  readonly redis?: Redis | undefined;
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
@@ -78,6 +101,13 @@ export function buildApp(deps: BuildAppDeps) {
       "request completed",
     );
   });
+
+  if (deps.db !== undefined) {
+    app.decorate("db", deps.db);
+  }
+  if (deps.redis !== undefined) {
+    app.decorate("redis", deps.redis);
+  }
 
   registerErrorHandling(app);
   registerHealthRoutes(app, readinessChecks);

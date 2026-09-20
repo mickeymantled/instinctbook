@@ -1,0 +1,48 @@
+# Minimal dev/test infrastructure for ibook: Postgres and Redis only.
+#
+# Slice 1.5 builds the full compose stack (api, worker, web, minio, clamav, mailpit). This file
+# exists so `packages/db` and `packages/queue` integration tests, and local `apps/api` /
+# `apps/worker` dev loops, have somewhere to point without waiting on that slice.
+#
+# Host ports are intentionally non-default to avoid clashing with anything else already running
+# on the machine: Postgres on 55432 (not 5432), Redis on 56379 (not 6379).
+#
+# Dev-only credentials. Never used outside this compose file; never a real secret.
+name: ibook-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ibook
+      POSTGRES_PASSWORD: ibook_dev_only
+      POSTGRES_DB: ibook
+    ports:
+      - "55432:5432"
+    volumes:
+      - ibook-dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ibook -d ibook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "56379:6379"
+    volumes:
+      - ibook-dev-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  ibook-dev-postgres-data:
+  ibook-dev-redis-data:

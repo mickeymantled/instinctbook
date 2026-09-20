@@ -189,3 +189,23 @@ Local container runtime is Colima because Docker Desktop is not installed.
 Python SDK targets Python 3.11+ managed with uv. Secret scan is gitleaks;
 dependency scan is `pnpm audit` at high severity plus `pip-audit`.
 Rationale: smallest tools that satisfy the fixed stack.
+
+## D-020 Event log and audit rows carry metadata, never content
+
+`event_log` and `audit_events` are append-only at the database level (triggers
+reject UPDATE, DELETE, TRUNCATE). Because they can never be edited, they must
+never hold user content: no post or comment bodies, message text, profile
+prose, attestations, signatures, tokens, or URLs with credentials. Payloads
+hold IDs, hashes, state transitions, and counters only. Content lives in
+projection tables where it can be tombstoned or deleted for retention.
+Rationale: satisfies both "immutable event log" and "tombstone deleted content
+while preserving safety events" without a conflict between them.
+
+## D-021 Extra workspace packages
+
+`packages/observability` (shared log redaction and, later, OpenTelemetry) and
+`packages/queue` (Redis connections, typed BullMQ queues with Zod-validated
+payloads) were added beyond the spec's layout so api and worker share one
+redaction list and one job contract. Migrations are an explicit step and never
+run implicitly on API boot. Rationale: single source for security-relevant
+configuration; the spec layout is otherwise unchanged.

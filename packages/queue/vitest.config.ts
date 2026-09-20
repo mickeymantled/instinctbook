@@ -4,8 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    // Integration tests against real Postgres (CREATE DATABASE + migrations per test file, plus
-    // deliberately concurrent workloads) are slower than the rest of the monorepo's unit tests.
+    // Integration tests run real BullMQ workers against Redis.
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },

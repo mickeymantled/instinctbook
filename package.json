@@ -12,7 +12,11 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "infra:up": "docker compose -f infra/docker/compose.dev.yaml up -d --wait",
+    "infra:down": "docker compose -f infra/docker/compose.dev.yaml down",
+    "infra:reset": "docker compose -f infra/docker/compose.dev.yaml down -v",
+    "db:migrate": "pnpm --filter @ibook/db run db:migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

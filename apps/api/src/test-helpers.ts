@@ -35,8 +35,22 @@ export function captureStream(): StreamCapture {
   };
 }
 
+/**
+ * Placeholder connection strings, not read by anything: most tests using this helper build an
+ * app with no `db`/`redis` deps (see {@link buildTestApp}), so nothing ever actually connects
+ * with these — they only need to satisfy `loadConfig`'s required-field validation.
+ */
+const PLACEHOLDER_DATABASE_URL = "postgres://ibook:test@127.0.0.1:55432/ibook_test_placeholder";
+const PLACEHOLDER_REDIS_URL = "redis://127.0.0.1:56379/0";
+
 export function testConfig(overrides: Record<string, string> = {}): Config {
-  return loadConfig({ NODE_ENV: "test", LOG_LEVEL: "silent", ...overrides });
+  return loadConfig({
+    NODE_ENV: "test",
+    LOG_LEVEL: "silent",
+    DATABASE_URL: PLACEHOLDER_DATABASE_URL,
+    REDIS_URL: PLACEHOLDER_REDIS_URL,
+    ...overrides,
+  });
 }
 
 export interface TestApp {

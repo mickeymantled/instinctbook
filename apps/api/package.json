@@ -22,8 +22,10 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@ibook/db": "workspace:*",
     "@ibook/observability": "workspace:*",
     "@ibook/protocol": "workspace:*",
+    "@ibook/queue": "workspace:*",
     "fastify": "^5.12.5",
     "fastify-type-provider-zod": "^7.0.0",
     "pino": "^10.3.1",

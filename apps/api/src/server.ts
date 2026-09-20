@@ -1,3 +1,5 @@
+import { createDb, pingDb } from "@ibook/db";
+import { createRedis, pingRedis } from "@ibook/queue";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 
@@ -10,7 +12,21 @@ function toErrorFields(error: unknown): { errorName: string; errorMessage: strin
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const app = buildApp({ config, readinessChecks: {} });
+
+  // Migrations are never run here: they're an explicit `pnpm db:migrate` step (slice 1.5 adds a
+  // one-shot compose migrate service). Booting the API must never mutate schema as a side effect.
+  const { db, pool, close: closeDb } = createDb(config.DATABASE_URL);
+  const redis = createRedis(config.REDIS_URL, { role: "app" });
+
+  const app = buildApp({
+    config,
+    db,
+    redis,
+    readinessChecks: {
+      postgres: () => pingDb(pool),
+      redis: () => pingRedis(redis),
+    },
+  });
 
   let shuttingDown = false;
 
@@ -28,8 +44,11 @@ async function main(): Promise<void> {
     }, FORCE_EXIT_TIMEOUT_MS);
     forceExitTimer.unref();
 
-    app
-      .close()
+    (async () => {
+      await app.close();
+      await redis.quit();
+      await closeDb();
+    })()
       .then(() => {
         clearTimeout(forceExitTimer);
         process.exit(0);

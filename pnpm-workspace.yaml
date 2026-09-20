@@ -4,6 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  msgpackr-extract: true
 
 catalog:
   typescript: ^7.0.2

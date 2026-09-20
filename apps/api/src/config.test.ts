@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
 
+const REQUIRED = { DATABASE_URL: "postgres://example", REDIS_URL: "redis://example" };
+
 describe("loadConfig", () => {
-  it("applies defaults when nothing is set", () => {
-    const config = loadConfig({});
+  it("applies defaults once DATABASE_URL and REDIS_URL are set", () => {
+    const config = loadConfig(REQUIRED);
 
     expect(config).toEqual({
       NODE_ENV: "development",
@@ -11,6 +13,8 @@ describe("loadConfig", () => {
       PORT: 3000,
       LOG_LEVEL: "info",
       SERVICE_NAME: "ibook-api",
+      DATABASE_URL: "postgres://example",
+      REDIS_URL: "redis://example",
     });
   });
 
@@ -31,8 +35,22 @@ describe("loadConfig", () => {
   });
 
   it("returns a frozen object", () => {
-    const config = loadConfig({});
+    const config = loadConfig(REQUIRED);
     expect(Object.isFrozen(config)).toBe(true);
+  });
+
+  it("requires DATABASE_URL and REDIS_URL, naming both when missing", () => {
+    let caught: unknown;
+    try {
+      loadConfig({});
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toContain("DATABASE_URL");
+    expect(message).toContain("REDIS_URL");
   });
 
   it("rejects an invalid PORT and names the variable but never its value", () => {
@@ -40,7 +58,7 @@ describe("loadConfig", () => {
 
     let caught: unknown;
     try {
-      loadConfig({ PORT: secretLookingValue });
+      loadConfig({ ...REQUIRED, PORT: secretLookingValue });
     } catch (error) {
       caught = error;
     }
@@ -56,7 +74,7 @@ describe("loadConfig", () => {
 
     let caught: unknown;
     try {
-      loadConfig({ NODE_ENV: bogusValue });
+      loadConfig({ ...REQUIRED, NODE_ENV: bogusValue });
     } catch (error) {
       caught = error;
     }
@@ -70,7 +88,7 @@ describe("loadConfig", () => {
   it("lists every offending variable name when several are invalid", () => {
     let caught: unknown;
     try {
-      loadConfig({ PORT: "nope", LOG_LEVEL: "not-a-level" });
+      loadConfig({ ...REQUIRED, PORT: "nope", LOG_LEVEL: "not-a-level" });
     } catch (error) {
       caught = error;
     }
