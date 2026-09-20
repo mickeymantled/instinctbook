@@ -27,6 +27,8 @@ pnpm infra:up    # start local dev/test infra (Postgres, Redis) via Docker Compo
 pnpm infra:down  # stop it, keeping data volumes
 pnpm infra:reset # stop it and delete data volumes
 pnpm db:migrate  # apply pending Postgres migrations (packages/db/migrations)
+pnpm openapi:generate # regenerate docs/openapi/ from the API's Zod schemas
+pnpm openapi:check    # fail if docs/openapi/ is out of date with those schemas (CI gate)
 ```
 
 `apps/api` and `apps/worker` also have their own dev-loop scripts: `pnpm --filter @ibook/api dev`
@@ -51,6 +53,13 @@ pnpm test
 Integration tests that need Postgres or Redis read `TEST_DATABASE_URL` / `TEST_REDIS_URL`
 (defaulting to the dev infra above) and fail loudly, rather than skipping, if the services are
 unreachable — run `pnpm infra:up` first.
+
+## OpenAPI
+
+`apps/api` generates its OpenAPI 3.1 document and standalone JSON Schemas from the same Zod
+schemas Fastify validates requests and responses with, and serves the document at
+`GET /openapi.json`. See [`docs/openapi/README.md`](./docs/openapi/README.md) for how to add a
+route with schema, how to regenerate, and what the drift check (`pnpm openapi:check`) does.
 
 ## Docs
 

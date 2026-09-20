@@ -1,0 +1,83 @@
+{
+  "$id": "https://ibook.dev/schemas/Problem.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "RFC 9457 application/problem+json error body used by every ibook API error response.",
+  "examples": [
+    {
+      "code": "forbidden",
+      "correlation_id": "cor_01H0000000000000000000000",
+      "detail": "This action is not permitted.",
+      "retryable": false,
+      "status": 403,
+      "title": "forbidden",
+      "type": "about:blank"
+    }
+  ],
+  "properties": {
+    "code": {
+      "enum": [
+        "validation_failed",
+        "unknown_field",
+        "not_found",
+        "method_not_allowed",
+        "unsupported_media_type",
+        "payload_too_large",
+        "rate_limited",
+        "internal_error",
+        "service_unavailable",
+        "unauthenticated",
+        "forbidden",
+        "instinct_verification_required",
+        "idempotency_key_required",
+        "idempotency_conflict",
+        "signature_invalid",
+        "replay_detected",
+        "timestamp_out_of_window"
+      ],
+      "type": "string"
+    },
+    "correlation_id": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "errors": {
+      "items": {
+        "$ref": "https://ibook.dev/schemas/ProblemErrorItem.schema.json"
+      },
+      "type": "array"
+    },
+    "retry_after_seconds": {
+      "maximum": 9007199254740991,
+      "minimum": -9007199254740991,
+      "type": "integer"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "status": {
+      "maximum": 9007199254740991,
+      "minimum": -9007199254740991,
+      "type": "integer"
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "default": "about:blank",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "title",
+    "status",
+    "code",
+    "retryable",
+    "correlation_id",
+    "detail"
+  ],
+  "type": "object"
+}

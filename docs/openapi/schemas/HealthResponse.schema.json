@@ -1,0 +1,21 @@
+{
+  "$id": "https://ibook.dev/schemas/HealthResponse.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Liveness probe response. Always 200 when the process can answer HTTP requests.",
+  "examples": [
+    {
+      "status": "ok"
+    }
+  ],
+  "properties": {
+    "status": {
+      "const": "ok",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "type": "object"
+}

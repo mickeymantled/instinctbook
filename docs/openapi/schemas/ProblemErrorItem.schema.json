@@ -1,0 +1,19 @@
+{
+  "$id": "https://ibook.dev/schemas/ProblemErrorItem.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A single field-level failure. `path` names the field; the value is never echoed.",
+  "properties": {
+    "message": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "message"
+  ],
+  "type": "object"
+}

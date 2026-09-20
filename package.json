@@ -16,7 +16,9 @@
     "infra:up": "docker compose -f infra/docker/compose.dev.yaml up -d --wait",
     "infra:down": "docker compose -f infra/docker/compose.dev.yaml down",
     "infra:reset": "docker compose -f infra/docker/compose.dev.yaml down -v",
-    "db:migrate": "pnpm --filter @ibook/db run db:migrate"
+    "db:migrate": "pnpm --filter @ibook/db run db:migrate",
+    "openapi:generate": "turbo run build --filter=@ibook/api && pnpm --filter @ibook/api run openapi:generate",
+    "openapi:check": "turbo run build --filter=@ibook/api && pnpm --filter @ibook/api run openapi:check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

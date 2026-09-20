@@ -32,7 +32,7 @@ describe("logging redaction", () => {
 
     app.post(
       "/test/log-markers",
-      { schema: { body: z.object({ secret: z.string() }) } },
+      { schema: { body: z.strictObject({ secret: z.string() }) } },
       async (request) => {
         request.log.info(
           {

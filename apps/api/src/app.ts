@@ -1,7 +1,8 @@
 import type { Database } from "@ibook/db";
 import type { Redis } from "@ibook/queue";
-import type { FastifyServerOptions } from "fastify";
+import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import Fastify, { LogController } from "fastify";
+import fastifyPlugin from "fastify-plugin";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import type { Config } from "./config.js";
@@ -11,6 +12,9 @@ import type { ReadinessChecks } from "./health.js";
 import { registerHealthRoutes } from "./health.js";
 import type { LoggerOverrides } from "./logger.js";
 import { createLogger } from "./logger.js";
+import { registerOpenApiDocumentRoute } from "./openapi/document-route.js";
+import { registerOpenApiDocument } from "./openapi/register.js";
+import { assertStrictWriteSchemas } from "./openapi/strict-write-schemas.js";
 
 const ONE_MEBIBYTE = 1_048_576;
 const CORRELATION_ID_LOG_LABEL = "correlationId";
@@ -80,27 +84,55 @@ export function buildApp(deps: BuildAppDeps) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  app.addHook("onRequest", async (request, reply) => {
-    reply.header(CORRELATION_ID_HEADER, request.id);
-    reply.header("x-content-type-options", "nosniff");
-    reply.header("referrer-policy", "no-referrer");
-    reply.header("cache-control", "no-store");
-  });
+  // A plain `addHook`, not itself a deferred plugin registration, so it takes effect
+  // immediately — before any route this function (or a caller, afterwards) declares. No
+  // ordering dependency on the block below.
+  assertStrictWriteSchemas(app);
 
-  app.addHook("onResponse", async (request, reply) => {
-    // request.log is a child logger bound with `requestIdLogLabel: correlationId` above, so the
-    // correlation id is already present on every line without repeating it here.
-    request.log.info(
-      {
-        method: request.method,
-        path: request.url.split("?")[0],
-        statusCode: reply.statusCode,
-        responseTimeMs: reply.elapsedTime,
-        remoteAddress: request.ip,
-      },
-      "request completed",
-    );
-  });
+  // Registers `@fastify/swagger`, which captures every route's schema via its own `onRoute`
+  // hook — wired up inside swagger's plugin body, which (like any `app.register(...)` plugin)
+  // Fastify/avvio run later, during the boot sequence, not synchronously here. A route added
+  // directly on `app` between this call and that boot would therefore run before the hook
+  // exists and be silently missing from the generated document (verified against the real
+  // plugin while building this: an unwrapped `app.get()` right after this call produced a
+  // document with an empty `paths`).
+  registerOpenApiDocument(app);
+
+  // Every route this app declares is therefore wrapped in its own `app.register(...)` too, so
+  // avvio runs it strictly after `registerOpenApiDocument`'s (registrations run in the order
+  // they were queued). `fastifyPlugin` (fp) marks it so `setErrorHandler`/`setNotFoundHandler`/
+  // `addHook` calls inside apply to the whole app — the root scope — instead of being scoped to
+  // this callback's own encapsulation child, preserving the same global behavior as calling them
+  // directly on `app`.
+  app.register(
+    fastifyPlugin(async (instance: FastifyInstance) => {
+      instance.addHook("onRequest", async (request, reply) => {
+        reply.header(CORRELATION_ID_HEADER, request.id);
+        reply.header("x-content-type-options", "nosniff");
+        reply.header("referrer-policy", "no-referrer");
+        reply.header("cache-control", "no-store");
+      });
+
+      instance.addHook("onResponse", async (request, reply) => {
+        // request.log is a child logger bound with `requestIdLogLabel: correlationId` above, so
+        // the correlation id is already present on every line without repeating it here.
+        request.log.info(
+          {
+            method: request.method,
+            path: request.url.split("?")[0],
+            statusCode: reply.statusCode,
+            responseTimeMs: reply.elapsedTime,
+            remoteAddress: request.ip,
+          },
+          "request completed",
+        );
+      });
+
+      registerErrorHandling(instance);
+      registerHealthRoutes(instance, readinessChecks);
+      registerOpenApiDocumentRoute(instance);
+    }),
+  );
 
   if (deps.db !== undefined) {
     app.decorate("db", deps.db);
@@ -108,9 +140,6 @@ export function buildApp(deps: BuildAppDeps) {
   if (deps.redis !== undefined) {
     app.decorate("redis", deps.redis);
   }
-
-  registerErrorHandling(app);
-  registerHealthRoutes(app, readinessChecks);
 
   return app;
 }

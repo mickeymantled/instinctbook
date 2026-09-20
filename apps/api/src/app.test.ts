@@ -25,7 +25,7 @@ describe("problem+json error handling", () => {
 
     testApp.app.post(
       "/test/validated",
-      { schema: { body: z.object({ secret: z.string().min(5) }) } },
+      { schema: { body: z.strictObject({ secret: z.string().min(5) }) } },
       async (request) => ({ ok: true, len: request.body.secret.length }),
     );
   });

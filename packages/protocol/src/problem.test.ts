@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { ProblemCode, ProblemSchema } from "./problem.js";
+import { z } from "zod";
+import { ProblemCode, ProblemErrorItemSchema, ProblemSchema } from "./problem.js";
+
+describe("ProblemSchema component metadata", () => {
+  it("is registered under a stable id with at least one example", () => {
+    const meta = z.globalRegistry.get(ProblemSchema);
+    expect(meta?.id).toBe("Problem");
+    const examples = meta?.examples as unknown[] | undefined;
+    expect(examples).toBeDefined();
+    expect(examples?.length).toBeGreaterThan(0);
+  });
+
+  it("registers ProblemErrorItem under its own stable id", () => {
+    const meta = z.globalRegistry.get(ProblemErrorItemSchema);
+    expect(meta?.id).toBe("ProblemErrorItem");
+  });
+});
 
 describe("ProblemSchema", () => {
   it("accepts a minimal valid problem", () => {

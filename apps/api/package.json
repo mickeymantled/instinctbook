@@ -19,21 +19,27 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "openapi:generate": "node dist/openapi/generate.js",
+    "openapi:check": "node dist/openapi/check.js"
   },
   "dependencies": {
+    "@fastify/swagger": "^9.8.1",
     "@ibook/db": "workspace:*",
     "@ibook/observability": "workspace:*",
     "@ibook/protocol": "workspace:*",
     "@ibook/queue": "workspace:*",
     "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
     "fastify-type-provider-zod": "^7.0.0",
     "pino": "^10.3.1",
     "ulid": "^3.0.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@seriousme/openapi-schema-validator": "^2.10.0",
     "@types/node": "catalog:",
+    "ajv": "^8.20.0",
     "tsx": "^4.23.13",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -167,6 +167,30 @@ function getStatusCode(error: unknown): number | undefined {
 }
 
 /**
+ * A subset of the Zod issue shapes `hasZodFastifySchemaValidationErrors` narrows to. Only the
+ * fields this module reads are declared; see `fastify-type-provider-zod`'s `createValidationError`
+ * for the full shape (`keyword` mirrors the Zod issue's `code`, and `params` carries every other
+ * issue field, including `keys` for an `"unrecognized_keys"` issue).
+ */
+interface ZodFastifyValidationIssue {
+  readonly keyword: string;
+  readonly instancePath: string;
+  readonly message?: string;
+  readonly params?: { readonly keys?: readonly unknown[] };
+}
+
+function isUnrecognizedKeysIssue(issue: ZodFastifyValidationIssue): boolean {
+  return issue.keyword === "unrecognized_keys";
+}
+
+/** Builds one `ProblemErrorItem` per offending key, pointing at the key itself — never its value. */
+function unrecognizedKeyErrors(issue: ZodFastifyValidationIssue): ProblemErrorItem[] {
+  const keys = issue.params?.keys?.filter((key): key is string => typeof key === "string") ?? [];
+  const base = issue.instancePath === "" || issue.instancePath === "/" ? "" : issue.instancePath;
+  return keys.map((key) => ({ path: `${base}/${key}`, message: "Unrecognized field." }));
+}
+
+/**
  * Converts anything Fastify's error handler might receive into a safe AppError. Never includes
  * the original error's message or stack in the result — those are logged separately, server
  * side only.
@@ -177,7 +201,19 @@ function toAppError(error: unknown): AppError {
   }
 
   if (hasZodFastifySchemaValidationErrors(error)) {
-    const errors: ProblemErrorItem[] = error.validation.map((issue) => ({
+    const issues = error.validation as unknown as ZodFastifyValidationIssue[];
+    const unrecognizedKeyIssues = issues.filter(isUnrecognizedKeysIssue);
+
+    // A strict-schema violation (docs/SPEC.md "Reliability contract": unknown fields are
+    // rejected on writes) gets its own code so callers can tell "you sent something we don't
+    // recognize" apart from "what you sent doesn't validate" — see apps/api/src/openapi/
+    // strict-write-schemas.ts, which guarantees every write route's body schema is strict enough
+    // to produce this issue instead of silently stripping/accepting the extra field.
+    if (unrecognizedKeyIssues.length > 0) {
+      return AppError.unknownField(undefined, unrecognizedKeyIssues.flatMap(unrecognizedKeyErrors));
+    }
+
+    const errors: ProblemErrorItem[] = issues.map((issue) => ({
       path: issue.instancePath === "" ? "/" : issue.instancePath,
       message: issue.message ?? "Invalid value.",
     }));

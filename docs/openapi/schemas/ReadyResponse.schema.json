@@ -1,0 +1,39 @@
+{
+  "$id": "https://ibook.dev/schemas/ReadyResponse.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Readiness probe response, naming the pass/fail status of each dependency check.",
+  "examples": [
+    {
+      "checks": {
+        "postgres": "ok",
+        "redis": "ok"
+      },
+      "status": "ready"
+    }
+  ],
+  "properties": {
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "ok",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "propertyNames": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "status": {
+      "const": "ready",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "checks"
+  ],
+  "type": "object"
+}

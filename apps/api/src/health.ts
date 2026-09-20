@@ -1,19 +1,13 @@
+import { HealthResponseSchema, ReadyResponseSchema } from "@ibook/protocol";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { z } from "zod";
 import { AppError } from "./errors.js";
+import { problemResponses } from "./openapi/problem-responses.js";
 
 /** Name -> async check. A check should reject/throw to report unhealthy. */
 export type ReadinessChecks = Record<string, () => Promise<void>>;
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
-
-const HealthzResponseSchema = z.strictObject({ status: z.literal("ok") });
-
-const ReadyzResponseSchema = z.strictObject({
-  status: z.literal("ready"),
-  checks: z.record(z.string(), z.enum(["ok", "failed"])),
-});
 
 type CheckStatus = "ok" | "failed";
 
@@ -55,25 +49,45 @@ export function registerHealthRoutes(
 ): void {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  typedApp.get("/healthz", { schema: { response: { 200: HealthzResponseSchema } } }, async () => ({
-    status: "ok" as const,
-  }));
+  typedApp.get(
+    "/healthz",
+    {
+      schema: {
+        operationId: "getHealthz",
+        summary: "Liveness probe.",
+        tags: ["system"],
+        response: { 200: HealthResponseSchema },
+      },
+    },
+    async () => ({ status: "ok" as const }),
+  );
 
-  typedApp.get("/readyz", { schema: { response: { 200: ReadyzResponseSchema } } }, async () => {
-    const entries = Object.entries(readinessChecks);
-    const results = await Promise.all(
-      entries.map(([name, check]) => runCheck(name, check, timeoutMs)),
-    );
-    const failed = results.filter(([, status]) => status === "failed");
-
-    if (failed.length > 0) {
-      throw AppError.serviceUnavailable(
-        "One or more readiness checks failed.",
-        results.map(([name, status]) => ({ path: name, message: status })),
+  typedApp.get(
+    "/readyz",
+    {
+      schema: {
+        operationId: "getReadyz",
+        summary: "Readiness probe: reports the pass/fail status of every dependency check.",
+        tags: ["system"],
+        response: { 200: ReadyResponseSchema, ...problemResponses(503) },
+      },
+    },
+    async () => {
+      const entries = Object.entries(readinessChecks);
+      const results = await Promise.all(
+        entries.map(([name, check]) => runCheck(name, check, timeoutMs)),
       );
-    }
+      const failed = results.filter(([, status]) => status === "failed");
 
-    const checks = Object.fromEntries(results) as Record<string, CheckStatus>;
-    return { status: "ready" as const, checks };
-  });
+      if (failed.length > 0) {
+        throw AppError.serviceUnavailable(
+          "One or more readiness checks failed.",
+          results.map(([name, status]) => ({ path: name, message: status })),
+        );
+      }
+
+      const checks = Object.fromEntries(results) as Record<string, CheckStatus>;
+      return { status: "ready" as const, checks };
+    },
+  );
 }
