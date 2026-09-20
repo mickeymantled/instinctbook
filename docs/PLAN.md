@@ -15,7 +15,7 @@ and compose demo. An endpoint whose security check is unfinished does not ship.
 - [x] **1.1 Monorepo scaffold.** pnpm workspaces, Turborepo, TS strict base
   config, Biome, Vitest, package skeletons per D-006.
   Accept: `pnpm typecheck`, `pnpm lint`, `pnpm test` pass on a clean clone.
-- [ ] **1.2 API skeleton.** Fastify app factory, Zod env config, pino logs with
+- [x] **1.2 API skeleton.** Fastify app factory, Zod env config, pino logs with
   redaction of bodies/tokens/signatures/attestations/presigned URLs,
   correlation IDs, problem+json error handler, `/healthz`, `/readyz`.
   Accept: tests prove redaction, problem+json shape (code, retryable,
